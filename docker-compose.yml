@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: pyhosting_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-pyhosting}
+      POSTGRES_USER: ${DB_USER:-pyuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pysecret123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - pyhosting_internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: pyhosting_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - pyhosting_internal
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pyhosting_web
+    restart: always
+    command: daphne -b 0.0.0.0 -p 8000 pyhosting.asgi:application
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-pyhosting-super-secret-key-prod}
+      DB_NAME: ${DB_NAME:-pyhosting}
+      DB_USER: ${DB_USER:-pyuser}
+      DB_PASSWORD: ${DB_PASSWORD:-pysecret123}
+      DB_HOST: db
+      DB_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-pyhosting.uz,www.pyhosting.uz,localhost,127.0.0.1}
+    volumes:
+      - ./media:/app/media
+      - ./static:/app/static
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - pyhosting_internal
+      - pyhosting_bot_net
+
+networks:
+  pyhosting_internal:
+    driver: bridge
+  pyhosting_bot_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
